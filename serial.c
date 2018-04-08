@@ -2,6 +2,12 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/usart.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+
+int _write(int fd, char *ptr, int len);
+int _read(int fd, char *ptr, int len);
+void get_buffered_line(void);
 
 /*
 #ifndef __NO_SYSTEM_INIT
@@ -9,6 +15,15 @@ void SystemInit()
 {}
 #endif
 */
+
+#define BUFLEN 127
+
+static uint16_t start_ndx;
+static uint16_t end_ndx;
+static char buf[BUFLEN+1];
+#define buf_len ((end_ndx - start_ndx) % BUFLEN)
+static inline int inc_ndx(int n) { return ((n + 1) % BUFLEN); }
+static inline int dec_ndx(int n) { return (((n + BUFLEN) - 1) % BUFLEN); }
 
 static void io_setup(void)
 {
@@ -64,57 +79,118 @@ int main(void)
   
   while(1)
   {
-    //int i;
-    usart_send_blocking(USART3,'T');
-    usart_send_blocking(USART3,'h');
-    usart_send_blocking(USART3,'e');
-    usart_send_blocking(USART3,' ');
-    usart_send_blocking(USART3,'q');
-    usart_send_blocking(USART3,'u');
-    usart_send_blocking(USART3,'i');
-    usart_send_blocking(USART3,'c');
-    usart_send_blocking(USART3,'k');
-    usart_send_blocking(USART3,' ');
-    usart_send_blocking(USART3,'b');
-    usart_send_blocking(USART3,'r');
-    usart_send_blocking(USART3,'o');
-    usart_send_blocking(USART3,'w');
-    usart_send_blocking(USART3,'n');
-    usart_send_blocking(USART3,' ');
-    usart_send_blocking(USART3,'f');
-    usart_send_blocking(USART3,'o');
-    usart_send_blocking(USART3,'x');
-    usart_send_blocking(USART3,' ');
-    usart_send_blocking(USART3,'j');
-    usart_send_blocking(USART3,'u');
-    usart_send_blocking(USART3,'m');
-    usart_send_blocking(USART3,'p');
-    usart_send_blocking(USART3,'e');
-    usart_send_blocking(USART3,'d');
-    usart_send_blocking(USART3,' ');
-    usart_send_blocking(USART3,'o');
-    usart_send_blocking(USART3,'v');
-    usart_send_blocking(USART3,'e');
-    usart_send_blocking(USART3,'r');
-    usart_send_blocking(USART3,' ');
-    usart_send_blocking(USART3,'t');
-    usart_send_blocking(USART3,'h');
-    usart_send_blocking(USART3,'e');
-    usart_send_blocking(USART3,' ');
-    usart_send_blocking(USART3,'l');
-    usart_send_blocking(USART3,'a');
-    usart_send_blocking(USART3,'z');
-    usart_send_blocking(USART3,'y');
-    usart_send_blocking(USART3,' ');
-    usart_send_blocking(USART3,'d');
-    usart_send_blocking(USART3,'o');
-    usart_send_blocking(USART3,'g');
-    usart_send_blocking(USART3,'s');
-    usart_send_blocking(USART3,'.');
-    usart_send_blocking(USART3,'\r');
-    usart_send_blocking(USART3,'\n');
-    //for (i = 0; i < 1000000; i++)	/* Wait a bit. */
-		//	__asm__("nop");
+    int i=3796;
+    float j=3.141592653589793;
+    float k=5.6;
+    float n=j/k;
+    printf("Enter the delay constant for blink (I=%04X,J=%f): \n",i,n);
+	  fflush(stdout);
   }
 }
 
+int _write(int fd, char *ptr, int len)
+{
+	int i = 0;
+
+	/*
+	 * Write "len" of char from "ptr" to file id "fd"
+	 * Return number of char written.
+	 *
+	 * Only work for STDOUT, STDIN, and STDERR
+	 */
+	if (fd > 2) {
+		return -1;
+	}
+	while (*ptr && (i < len)) {
+		usart_send_blocking(USART3, *ptr);
+		if (*ptr == '\n') {
+			usart_send_blocking(USART3, '\r');
+		}
+		i++;
+		ptr++;
+	}
+	return i;
+}
+
+/*
+ * Called by the libc stdio fread fucntions
+ *
+ * Implements a buffered read with line editing.
+ */
+int _read(int fd, char *ptr, int len)
+{
+	int	my_len;
+
+	if (fd > 2) {
+		return -1;
+	}
+
+	get_buffered_line();
+	my_len = 0;
+	while ((buf_len > 0) && (len > 0)) {
+		*ptr++ = buf[start_ndx];
+		start_ndx = inc_ndx(start_ndx);
+		my_len++;
+		len--;
+	}
+	return my_len; /* return the length we got */
+}
+
+/* back up the cursor one space */
+static inline void back_up(void)
+{
+	end_ndx = dec_ndx(end_ndx);
+	usart_send_blocking(USART3, '\010');
+	usart_send_blocking(USART3, ' ');
+	usart_send_blocking(USART3, '\010');
+}
+
+/*
+ * A buffered line editing function.
+ */
+void get_buffered_line(void) {
+	char	c;
+
+	if (start_ndx != end_ndx) {
+		return;
+	}
+	while (1) {
+		c = usart_recv_blocking(USART3);
+		if (c == '\r') {
+			buf[end_ndx] = '\n';
+			end_ndx = inc_ndx(end_ndx);
+			buf[end_ndx] = '\0';
+			usart_send_blocking(USART3, '\r');
+			usart_send_blocking(USART3, '\n');
+			return;
+		}
+		/* ^H or DEL erase a character */
+		if ((c == '\010') || (c == '\177')) {
+			if (buf_len == 0) {
+				usart_send_blocking(USART3, '\a');
+			} else {
+				back_up();
+			}
+		/* ^W erases a word */
+		} else if (c == 0x17) {
+			while ((buf_len > 0) &&
+					(!(isspace((int) buf[end_ndx])))) {
+				back_up();
+			}
+		/* ^U erases the line */
+		} else if (c == 0x15) {
+			while (buf_len > 0) {
+				back_up();
+			}
+		/* Non-editing character so insert it */
+		} else {
+			if (buf_len == (BUFLEN - 1)) {
+				usart_send_blocking(USART3, '\a');
+			} else {
+				buf[end_ndx] = c;
+				end_ndx = inc_ndx(end_ndx);
+				usart_send_blocking(USART3, c);
+			}
+		}
+	}
+}
