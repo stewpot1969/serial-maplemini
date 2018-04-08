@@ -1,6 +1,7 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/usart.h>
+#include <stdio.h>
 
 /*
 #ifndef __NO_SYSTEM_INIT
@@ -63,7 +64,7 @@ int main(void)
   
   while(1)
   {
-    int i;
+    //int i;
     usart_send_blocking(USART3,'T');
     usart_send_blocking(USART3,'h');
     usart_send_blocking(USART3,'e');
