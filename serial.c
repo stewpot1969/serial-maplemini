@@ -60,7 +60,7 @@ static void uart_setup(void)
   //USART_BRR(USART3)=1666;
 	usart_set_databits(USART3, 8);
 	usart_set_stopbits(USART3, USART_STOPBITS_1);
-	usart_set_mode(USART3, USART_MODE_TX);
+	usart_set_mode(USART3, USART_MODE_TX_RX);
 	usart_set_parity(USART3, USART_PARITY_NONE);
 	usart_set_flow_control(USART3, USART_FLOWCONTROL_NONE);
 
@@ -72,19 +72,17 @@ static void uart_setup(void)
 int main(void)
 {  
   //rcc_clock_setup_in_hse_8mhz_out_72mhz();
-
+  char c;
 
   io_setup();
   uart_setup();
   
+  printf("*** Type shit and I'll send back ASCII values. ***\n");
+  
   while(1)
   {
-    int i=3796;
-    float j=3.141592653589793;
-    float k=5.6;
-    float n=j/k;
-    printf("Enter the delay constant for blink (I=%04X,J=%f): \n",i,n);
-	  fflush(stdout);
+    c = usart_recv_blocking(USART3);
+    printf ("%c :: %02X :: %03i\n",c,c,c);
   }
 }
 
