@@ -72,17 +72,19 @@ static void uart_setup(void)
 int main(void)
 {  
   //rcc_clock_setup_in_hse_8mhz_out_72mhz();
-  char c;
+  char local_buf[32];
 
   io_setup();
   uart_setup();
   
-  printf("*** Type shit and I'll send back ASCII values. ***\n");
+  printf("*** Try typing stuff in. ***\n");
   
   while(1)
   {
-    c = usart_recv_blocking(USART3);
-    printf ("%c :: %02X :: %03i\n",c,c,c);
+  printf("Please enter something :");
+  fflush(stdout);
+  fgets(local_buf, 32, stdin);
+  printf("You typed in [%s]\n",local_buf);
   }
 }
 
