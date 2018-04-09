@@ -18,12 +18,8 @@ void SystemInit()
 
 #define BUFLEN 127
 
-static uint16_t start_ndx;
-static uint16_t end_ndx;
+static uint16_t bufcnt;
 static char buf[BUFLEN+1];
-#define buf_len ((end_ndx - start_ndx) % BUFLEN)
-static inline int inc_ndx(int n) { return ((n + 1) % BUFLEN); }
-static inline int dec_ndx(int n) { return (((n + BUFLEN) - 1) % BUFLEN); }
 
 static void io_setup(void)
 {
@@ -72,7 +68,7 @@ static void uart_setup(void)
 int main(void)
 {  
   //rcc_clock_setup_in_hse_8mhz_out_72mhz();
-  char local_buf[32];
+  char local_buf[120];
 
   io_setup();
   uart_setup();
@@ -119,78 +115,56 @@ int _write(int fd, char *ptr, int len)
  */
 int _read(int fd, char *ptr, int len)
 {
-	int	my_len;
-
+	int	my_len=0;
+  int bufptr=0;
+  
 	if (fd > 2) {
 		return -1;
 	}
 
 	get_buffered_line();
-	my_len = 0;
-	while ((buf_len > 0) && (len > 0)) {
-		*ptr++ = buf[start_ndx];
-		start_ndx = inc_ndx(start_ndx);
+	
+	while ((bufptr<bufcnt) && (len > 0)) {
+		*ptr++ = buf[bufptr++];
 		my_len++;
 		len--;
 	}
 	return my_len; /* return the length we got */
 }
 
-/* back up the cursor one space */
-static inline void back_up(void)
-{
-	end_ndx = dec_ndx(end_ndx);
-	usart_send_blocking(USART3, '\010');
-	usart_send_blocking(USART3, ' ');
-	usart_send_blocking(USART3, '\010');
-}
-
 /*
  * A buffered line editing function.
  */
 void get_buffered_line(void) {
-	char	c;
-
-	if (start_ndx != end_ndx) {
-		return;
-	}
-	while (1) {
-		c = usart_recv_blocking(USART3);
-		if (c == '\r') {
-			buf[end_ndx] = '\n';
-			end_ndx = inc_ndx(end_ndx);
-			buf[end_ndx] = '\0';
-			usart_send_blocking(USART3, '\r');
+  char c;
+  
+  /* Init vars */
+  bufcnt=0;
+  
+  while (1) {
+    /* get char */
+    c = usart_recv_blocking(USART3);
+    if (c == '\r') {        // CR = end
+      buf[bufcnt++]='\n';
+      buf[bufcnt++]='\0';
+      usart_send_blocking(USART3, '\r');
 			usart_send_blocking(USART3, '\n');
 			return;
 		}
-		/* ^H or DEL erase a character */
-		if ((c == '\010') || (c == '\177')) {
-			if (buf_len == 0) {
-				usart_send_blocking(USART3, '\a');
-			} else {
-				back_up();
-			}
-		/* ^W erases a word */
-		} else if (c == 0x17) {
-			while ((buf_len > 0) &&
-					(!(isspace((int) buf[end_ndx])))) {
-				back_up();
-			}
-		/* ^U erases the line */
-		} else if (c == 0x15) {
-			while (buf_len > 0) {
-				back_up();
-			}
-		/* Non-editing character so insert it */
-		} else {
-			if (buf_len == (BUFLEN - 1)) {
-				usart_send_blocking(USART3, '\a');
-			} else {
-				buf[end_ndx] = c;
-				end_ndx = inc_ndx(end_ndx);
-				usart_send_blocking(USART3, c);
-			}
-		}
-	}
-}
+    else if (c == 127) {   // DEL backspace
+      if (bufcnt>0) {
+        bufcnt--;
+        usart_send_blocking(USART3, '\010');
+	      usart_send_blocking(USART3, ' ');
+	      usart_send_blocking(USART3, '\010');
+      }
+    }
+    else if (bufcnt<BUFLEN) {
+      buf[bufcnt++]=c;
+      usart_send_blocking(USART3, c);   // echo input
+    }
+  }
+}  
+  
+  
+
