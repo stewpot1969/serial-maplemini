@@ -8,6 +8,7 @@
 int _write(int fd, char *ptr, int len);
 int _read(int fd, char *ptr, int len);
 void get_buffered_line(void);
+void dbg_print(char *boof);
 
 /*
 #ifndef __NO_SYSTEM_INIT
@@ -79,9 +80,20 @@ int main(void)
   {
   printf("Please enter something :");
   fflush(stdout);
+  dbg_print(local_buf);
   fgets(local_buf, 32, stdin);
+  dbg_print(buf);
+  dbg_print(local_buf);
   printf("You typed in [%s]\n",local_buf);
   }
+}
+
+void dbg_print(char *boof) {
+  int i=0;
+  for (i=0 ; i<=20 ; i++ ) {
+    printf("%02x ",boof[i]);
+  }
+  printf("\n");
 }
 
 int _write(int fd, char *ptr, int len)
@@ -160,6 +172,7 @@ void get_buffered_line(void) {
       }
     }
     else if (bufcnt<BUFLEN) {
+      // printf("%02x ",bufcnt);
       buf[bufcnt++]=c;
       usart_send_blocking(USART3, c);   // echo input
     }
